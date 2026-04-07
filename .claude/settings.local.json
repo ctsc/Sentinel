@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git init:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npm run:*)",
+      "Bash(docker ps:*)",
+      "Bash(cd /c/Users/OWNER/Desktop/sentinel && docker-compose up -d 2>&1)",
+      "Bash(cd /c/Users/OWNER/Desktop/sentinel && pip install kafka-python cassandra-driver python-dotenv pytest --quiet 2>&1 | tail -5)",
+      "Bash(python -m pytest tests/test_phase1_infra.py -v 2>&1)",
+      "Bash(pip install:*)",
+      "Bash(python -m pytest tests/test_producers.py::TestGdeltProducer::test_produces_valid_schema -v 2>&1)",
+      "Bash(python -c \"\nfrom ingestion.gdelt_producer import GdeltProducer\nimport logging\nlogging.basicConfig\\(level=logging.INFO\\)\np = GdeltProducer\\(\\)\np.connect\\(\\)\np.poll\\(\\)\np.close\\(\\)\n\" 2>&1)",
+      "Bash(python -c \"\nimport urllib.request, zipfile, io, csv\nurl = 'http://data.gdeltproject.org/gdeltv2/lastupdate.txt'\nreq = urllib.request.Request\\(url, headers={'User-Agent': 'Sentinel/1.0'}\\)\ntext = urllib.request.urlopen\\(req, timeout=30\\).read\\(\\).decode\\('utf-8'\\).strip\\(\\)\ncsv_url = [l.split\\(\\)[2] for l in text.splitlines\\(\\) if '.export.CSV' in l][0]\nprint\\(f'URL: {csv_url}'\\)\nraw = urllib.request.urlopen\\(urllib.request.Request\\(csv_url, headers={'User-Agent': 'Sentinel/1.0'}\\), timeout=60\\).read\\(\\)\nwith zipfile.ZipFile\\(io.BytesIO\\(raw\\)\\) as zf:\n    rows = list\\(csv.reader\\(io.StringIO\\(zf.read\\(zf.namelist\\(\\)[0]\\).decode\\('utf-8','replace'\\)\\), delimiter='\\\\t'\\)\\)\n    print\\(f'Total rows: {len\\(rows\\)}'\\)\n    conflict = sum\\(1 for r in rows if len\\(r\\)>57 and \\(r[26].startswith\\('18'\\) or r[26].startswith\\('19'\\) or \\(r[30].strip\\(\\) and float\\(r[30]\\)<-5\\)\\)\\)\n    print\\(f'Conflict \\(18/19 or GS<-5\\): {conflict}'\\)\n\" 2>&1)",
+      "Bash(python -m pytest tests/test_producers.py::TestGdeltProducer -v 2>&1)",
+      "Bash(python -c \"\nimport logging; logging.basicConfig\\(level=logging.INFO\\)\nfrom ingestion.gdelt_producer import GdeltProducer\np = GdeltProducer\\(\\)\np.run_once\\(\\)\np.close\\(\\)\n\" 2>&1 | grep -E \"\\(Emitted|conflict|Processing\\)\")",
+      "Bash(python -m pytest tests/test_producers.py::TestGdeltProducer tests/test_producers.py::TestRssProducer tests/test_producers.py::TestAcledProducer -v 2>&1)",
+      "Bash(python -m pytest tests/test_producers.py::TestWikipediaProducer::test_produces_valid_schema -v 2>&1)",
+      "Bash(python -m pytest tests/test_producers.py::TestBlueskyProducer::test_produces_valid_schema -v 2>&1)",
+      "Bash(python -m pytest tests/test_schema_consistency.py -v 2>&1)"
+    ]
+  }
+}

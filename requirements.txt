@@ -1,0 +1,41 @@
+# Sentinel — Python dependencies
+# Phase 1-4 (no pyflink, no torch)
+
+# Kafka
+kafka-python==2.0.2
+
+# NLP
+spacy==3.7.6
+
+# Geocoding
+geopy==2.4.1
+
+# RSS
+feedparser==6.0.11
+
+# Bluesky
+atproto==0.0.54
+
+# Wikipedia SSE
+sseclient-py==1.8.0
+aiohttp==3.9.5
+
+# API
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+websockets==12.0
+
+# Database
+cassandra-driver==3.29.1
+
+# AWS (Phase 5)
+boto3==1.34.144
+
+# Core
+pydantic==2.9.1
+python-dotenv==1.0.1
+
+# Testing
+pytest==8.3.2
+pytest-asyncio==0.23.8
+httpx==0.27.0
