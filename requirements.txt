@@ -1,8 +1,9 @@
 # Sentinel — Python dependencies
 # Phase 1-4 (no pyflink, no torch)
 
-# Kafka
-kafka-python==2.0.2
+# Kafka — kafka-python is abandoned and broken on Python 3.12+ (vendored six.moves issue).
+# kafka-python-ng is a maintained drop-in fork; `from kafka import ...` still works.
+kafka-python-ng==2.2.3
 
 # NLP
 spacy==3.7.6
@@ -27,6 +28,8 @@ websockets==12.0
 
 # Database
 cassandra-driver==3.29.1
+# Polyfill for asyncore (removed in Python 3.12, still required by cassandra-driver's reactor probe)
+pyasyncore==1.0.5
 
 # AWS (Phase 5)
 boto3==1.34.144
@@ -38,4 +41,4 @@ python-dotenv==1.0.1
 # Testing
 pytest==8.3.2
 pytest-asyncio==0.23.8
-httpx==0.27.0
+httpx==0.26.0  # pinned <0.27 to satisfy atproto==0.0.54

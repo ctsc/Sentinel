@@ -16,14 +16,14 @@ Parameters:
     NoEcho: true
     Description: Mapbox access token for frontend
 
-  AcledApiKey:
-    Type: String
-    NoEcho: true
-    Description: ACLED API key
-
   AcledEmail:
     Type: String
-    Description: ACLED API email
+    Description: ACLED myACLED account email (used for OAuth)
+
+  AcledPassword:
+    Type: String
+    NoEcho: true
+    Description: ACLED myACLED account password (used for OAuth)
 
 Resources:
   # --- VPC & Networking ---

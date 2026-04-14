@@ -1,3 +1,69 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+---
+
+## Quick Reference — Development Commands
+
+### Infrastructure (Docker)
+```bash
+docker-compose up -d                  # Start Kafka + Zookeeper + Cassandra
+docker-compose ps                     # Check container health
+docker exec -it sentinel-cassandra cqlsh -f /docker-entrypoint-initdb.d/init.cql  # Init Cassandra schema
+docker-compose down                   # Stop all containers
+```
+
+### Backend (Python 3.11 or 3.12 (NOT 3.13+ — spaCy 3.7 has no wheels for newer versions))
+```bash
+pip install -r requirements.txt       # Install dependencies
+python -m spacy download en_core_web_lg  # Download spaCy model (required for NER)
+
+# Run individual producers
+python -m ingestion.gdelt_producer
+python -m ingestion.acled_producer    # Requires ACLED_EMAIL + ACLED_PASSWORD in .env (OAuth)
+python -m ingestion.rss_producer
+python -m ingestion.bluesky_producer
+python -m ingestion.wikipedia_producer
+
+# Run NLP consumer (processes all Kafka topics)
+python -m processing.consumer
+
+# Run API server
+uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+### Frontend (Node/TypeScript)
+```bash
+cd frontend
+npm install                           # Install dependencies
+npm run dev                           # Vite dev server with HMR
+npm run build                         # TypeScript check + production build
+npm run lint                          # ESLint
+npm run preview                       # Preview production build
+```
+
+### Tests
+```bash
+# All tests require Docker containers running (Kafka + Cassandra)
+pytest tests/test_phase1_infra.py -v        # Infrastructure connectivity
+pytest tests/test_producers.py -v           # Producer schema validation
+pytest tests/test_schema_consistency.py -v  # Cross-source schema consistency
+pytest tests/test_nlp.py -v                 # NER, geocoder, classifier units
+pytest tests/test_dedup.py -v               # Deduplication logic
+pytest tests/test_pipeline_e2e.py -v        # Full pipeline integration
+pytest tests/test_api.py -v                 # REST + WebSocket endpoints
+pytest tests/ -v                            # Run all tests
+```
+
+### Environment Variables
+Copy `.env.example` to `.env` and fill in:
+- `ACLED_EMAIL` + `ACLED_PASSWORD` — required for ACLED producer (OAuth against myACLED account; register at acleddata.com/user/register)
+- `MAPBOX_TOKEN` — required for frontend map tiles (get from mapbox.com)
+- Kafka/Cassandra defaults work with docker-compose (localhost:9092 / localhost:9042)
+
+---
+
 # SENTINEL — Real-Time Global Conflict & News Intelligence Dashboard
 
 > GSU CSC 6311 | Solo Project | Carter Loftus | Spring 2026
@@ -74,8 +140,8 @@ Deck.gl's `HeatmapLayer` does NOT work on `GlobeView` — only on flat `MapView`
 - **Kafka topic:** `sentinel.raw.gdelt`
 
 #### 2. ACLED (Structured)
-- **Endpoint:** `https://api.acleddata.com/acled/read`
-- **Auth:** Free API key + email required (register at acleddata.com)
+- **Endpoint:** `https://acleddata.com/acled/read`
+- **Auth:** OAuth bearer token. POST email + password to `https://acleddata.com/oauth/token` → access token (24h) + refresh token (14d). Register a myACLED account at acleddata.com/user/register.
 - **Key fields:** `latitude`, `longitude`, `country`, `event_type`, `fatalities`, `event_date`, `actor1`, `actor2`, `source`
 - **Rate limit:** ~500 requests/day, paginate with `page=N` (5000 rows/page)
 - **Kafka topic:** `sentinel.raw.acled`
@@ -545,7 +611,7 @@ No MinIO locally — S3 writes are production only (Phase 5).
 - **Cache geocoding aggressively.** Pre-seed cache. Never hit Nominatim for the same entity twice.
 - **Dark theme.** #0a0a1a backgrounds, cyan/green/orange accents.
 - **Fail gracefully.** One source down ≠ pipeline down.
-- **Python 3.11+** backend. **TypeScript strict** frontend.
+- **Python 3.11 or 3.12 (NOT 3.13+ — spaCy 3.7 has no wheels for newer versions)** backend. **TypeScript strict** frontend.
 - **Flat map only.** MapView, not GlobeView.
 - **Test each phase before moving on.** Don't build on broken foundations.
 - **Flink is optional for dev.** Python consumer is the reliable path. Flink wraps it for production.

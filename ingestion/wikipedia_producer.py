@@ -52,7 +52,12 @@ class WikipediaProducer(BaseProducer):
         """Open a streaming connection to the Wikimedia EventStreams endpoint."""
         req = urllib.request.Request(
             WIKIPEDIA_SSE_URL,
-            headers={"Accept": "text/event-stream"},
+            headers={
+                "Accept": "text/event-stream",
+                # Wikimedia's streaming endpoint rejects the default Python UA.
+                # Their policy requires a UA that identifies the tool + contact.
+                "User-Agent": "Sentinel-OSINT/1.0 (https://github.com/ctsc/sentinel; academic research)",
+            },
         )
         response = urllib.request.urlopen(req, timeout=60)  # noqa: S310
         return sseclient.SSEClient(response)

@@ -1,22 +1,26 @@
 import type { SentinelEvent } from "../utils/types";
-import { EVENT_TYPE_COLORS } from "../utils/types";
+import { EVENT_TYPE_COLORS, classifyEvent, getEventTitle } from "../utils/types";
 
 interface Props {
   event: SentinelEvent | null;
   onClose: () => void;
+  onLocate?: (event: SentinelEvent) => void;
 }
 
-export default function EventPanel({ event, onClose }: Props) {
+export default function EventPanel({ event, onClose, onLocate }: Props) {
   if (!event) return null;
 
-  const typeColor = EVENT_TYPE_COLORS[event.event_type ?? "other"] ?? [150, 150, 150];
+  const type = classifyEvent(event);
+  const typeColor = EVENT_TYPE_COLORS[type] ?? [150, 150, 150];
+  const canLocate =
+    event.geo?.lat != null && event.geo?.lon != null && onLocate != null;
 
   return (
     <div className="event-panel">
       <button className="event-panel-close" onClick={onClose}>
         &times;
       </button>
-      <h3>{event.title ?? "Untitled Event"}</h3>
+      <h3>{getEventTitle(event)}</h3>
       <div className="event-meta">
         <span
           className="event-type-badge"
@@ -25,7 +29,7 @@ export default function EventPanel({ event, onClose }: Props) {
             color: `rgb(${typeColor[0]}, ${typeColor[1]}, ${typeColor[2]})`,
           }}
         >
-          {event.event_type ?? "other"}
+          {type}
         </span>
         <span>{event.source.toUpperCase()}</span>
         <span>{new Date(event.timestamp).toLocaleString()}</span>
@@ -52,16 +56,28 @@ export default function EventPanel({ event, onClose }: Props) {
         </p>
       )}
 
-      {event.source_url && (
-        <a
-          href={event.source_url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="event-source-link"
-        >
-          View Source &rarr;
-        </a>
-      )}
+      <div className="event-panel-actions">
+        {canLocate && (
+          <button
+            className="event-locate-btn"
+            onClick={() => onLocate!(event)}
+          >
+            Locate on map
+          </button>
+        )}
+        {event.source_url && event.source_url.startsWith("http") ? (
+          <a
+            href={event.source_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="event-source-link"
+          >
+            View Source &rarr;
+          </a>
+        ) : (
+          <span className="event-source-missing">No source link available</span>
+        )}
+      </div>
     </div>
   );
 }

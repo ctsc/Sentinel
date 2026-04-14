@@ -8,6 +8,8 @@ Each client gets its own asyncio.Queue to avoid backpressure issues.
 import asyncio
 import json
 import logging
+import queue as stdqueue
+import threading
 from typing import Set
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -18,76 +20,91 @@ router = APIRouter()
 
 # Global set of connected client queues
 _client_queues: Set[asyncio.Queue] = set()
-_kafka_consumer_task = None
+_kafka_thread: threading.Thread | None = None
+_kafka_raw_queue: stdqueue.Queue = stdqueue.Queue(maxsize=5000)
+_kafka_pump_task: asyncio.Task | None = None
+_kafka_stop_event = threading.Event()
 
 
-async def _kafka_to_queues():
-    """Background task: consume from Kafka and fan out to all client queues."""
+def _kafka_thread_loop():
+    """Dedicated thread that owns the KafkaConsumer for its entire lifetime.
+
+    kafka-python is not thread-safe; the consumer's selector binds to the
+    creator thread and fails with 'Invalid file descriptor: -1' on Windows
+    if polled from a different thread (which asyncio.to_thread does via a
+    pool). Keeping the consumer on one pinned thread avoids that.
+    """
     from kafka import KafkaConsumer as SyncKafkaConsumer
 
-    def _consume_batch():
-        """Sync Kafka consumer that yields batches."""
-        try:
-            consumer = SyncKafkaConsumer(
-                "sentinel.raw.gdelt",
-                "sentinel.raw.acled",
-                "sentinel.raw.rss",
-                "sentinel.raw.bluesky",
-                "sentinel.raw.wikipedia",
-                bootstrap_servers="localhost:9092",
-                group_id="sentinel-ws-live",
-                auto_offset_reset="latest",
-                value_deserializer=lambda m: json.loads(m.decode("utf-8")),
-                consumer_timeout_ms=1000,
-            )
-            return consumer
-        except Exception as e:
-            logger.error("Failed to connect Kafka for WebSocket feed: %s", e)
-            return None
-
-    consumer = await asyncio.to_thread(_consume_batch)
-    if not consumer:
-        logger.error("WebSocket Kafka consumer failed to start")
+    try:
+        consumer = SyncKafkaConsumer(
+            "sentinel.enriched",
+            bootstrap_servers="localhost:9092",
+            group_id="sentinel-ws-live",
+            auto_offset_reset="latest",
+            value_deserializer=lambda m: json.loads(m.decode("utf-8")),
+            consumer_timeout_ms=1000,
+        )
+    except Exception as e:
+        logger.error("Failed to connect Kafka for WebSocket feed: %s", e)
         return
 
-    logger.info("WebSocket Kafka consumer started")
+    logger.info("WebSocket Kafka consumer thread started")
 
     try:
-        while True:
-            # Poll in a thread to not block the event loop
-            def _poll():
-                records = consumer.poll(timeout_ms=1000)
-                messages = []
-                for tp, msgs in records.items():
-                    for msg in msgs:
-                        messages.append(msg.value)
-                return messages
+        while not _kafka_stop_event.is_set():
+            try:
+                records = consumer.poll(timeout_ms=500)
+            except Exception as e:
+                logger.error("Kafka poll error: %s", e)
+                _kafka_stop_event.wait(1.0)
+                continue
 
-            messages = await asyncio.to_thread(_poll)
-
-            if messages and _client_queues:
-                for msg in messages:
-                    for queue in list(_client_queues):
-                        try:
-                            queue.put_nowait(msg)
-                        except asyncio.QueueFull:
-                            pass  # Drop messages for slow clients
-
-            await asyncio.sleep(0.1)
-
-    except asyncio.CancelledError:
-        logger.info("WebSocket Kafka consumer cancelled")
-    except Exception as e:
-        logger.error("WebSocket Kafka consumer error: %s", e)
+            for _tp, msgs in records.items():
+                for msg in msgs:
+                    try:
+                        _kafka_raw_queue.put_nowait(msg.value)
+                    except stdqueue.Full:
+                        pass  # Drop oldest policy: just drop the new one
     finally:
-        await asyncio.to_thread(consumer.close)
+        try:
+            consumer.close()
+        except Exception:
+            pass
+        logger.info("WebSocket Kafka consumer thread stopped")
+
+
+async def _pump_to_clients():
+    """Async task: move events from the thread-safe queue into per-client async queues."""
+    loop = asyncio.get_running_loop()
+    while True:
+        try:
+            msg = await loop.run_in_executor(None, _kafka_raw_queue.get, True, 1.0)
+        except Exception:
+            await asyncio.sleep(0.1)
+            continue
+
+        if msg is None:
+            continue
+
+        for queue in list(_client_queues):
+            try:
+                queue.put_nowait(msg)
+            except asyncio.QueueFull:
+                pass
 
 
 def _ensure_kafka_consumer():
-    """Start the Kafka consumer background task if not already running."""
-    global _kafka_consumer_task
-    if _kafka_consumer_task is None or _kafka_consumer_task.done():
-        _kafka_consumer_task = asyncio.create_task(_kafka_to_queues())
+    """Start the Kafka consumer thread + async pump if not already running."""
+    global _kafka_thread, _kafka_pump_task
+
+    if _kafka_thread is None or not _kafka_thread.is_alive():
+        _kafka_stop_event.clear()
+        _kafka_thread = threading.Thread(target=_kafka_thread_loop, daemon=True)
+        _kafka_thread.start()
+
+    if _kafka_pump_task is None or _kafka_pump_task.done():
+        _kafka_pump_task = asyncio.create_task(_pump_to_clients())
 
 
 @router.websocket("/ws/live")

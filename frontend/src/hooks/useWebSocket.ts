@@ -39,7 +39,12 @@ export default function useWebSocket(): UseWebSocketReturn {
       try {
         const data = JSON.parse(msg.data);
         if (data.type === "events" && Array.isArray(data.events)) {
-          const newEvents = data.events as SentinelEvent[];
+          // Backend enriches events with coords, event_type, severity, confidence.
+          // Still drop any that fell through geocoding — those can't be placed.
+          const newEvents = (data.events as SentinelEvent[]).filter(
+            (e) => e.geo?.lat != null && e.geo?.lon != null
+          );
+          if (newEvents.length === 0) return;
           eventCountRef.current += newEvents.length;
 
           setEvents((prev) => {

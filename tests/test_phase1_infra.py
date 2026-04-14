@@ -9,7 +9,7 @@ import json
 import uuid
 
 import pytest
-from kafka import KafkaProducer, KafkaConsumer
+from kafka import KafkaProducer, KafkaConsumer, TopicPartition
 from kafka.errors import NoBrokersAvailable
 from cassandra.cluster import Cluster, NoHostAvailable
 
@@ -83,15 +83,17 @@ class TestKafka:
         result = future.get(timeout=10)
         assert result.topic == TEST_TOPIC
 
-        # Consume
+        # Consume — use manual partition assignment (no group_id) to avoid a
+        # kafka-python-ng coordinator bug on Python 3.12 Windows that fails to
+        # unregister already-closed sockets from the selector.
         consumer = KafkaConsumer(
-            TEST_TOPIC,
             bootstrap_servers=KAFKA_BOOTSTRAP,
-            auto_offset_reset="earliest",
             consumer_timeout_ms=10000,
             value_deserializer=lambda v: json.loads(v.decode("utf-8")),
-            group_id=f"test-phase1-{uuid.uuid4().hex[:8]}",
         )
+        tp = TopicPartition(TEST_TOPIC, 0)
+        consumer.assign([tp])
+        consumer.seek_to_beginning(tp)
 
         consumed = None
         for msg in consumer:

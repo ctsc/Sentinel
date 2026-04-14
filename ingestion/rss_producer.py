@@ -87,7 +87,13 @@ class RSSProducer(BaseProducer):
             feed_url: str = feed_cfg["url"]
 
             try:
-                parsed = feedparser.parse(feed_url)
+                # Reddit and many CDNs block the default feedparser UA.
+                # Send a real browser UA so they hand us the feed.
+                parsed = feedparser.parse(
+                    feed_url,
+                    agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                          "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                )
             except Exception:
                 logger.exception("[rss] Failed to fetch feed %s", feed_name)
                 continue

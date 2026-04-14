@@ -7,17 +7,43 @@ interface Props {
   onToggleType: (type: string) => void;
   showHeatmap: boolean;
   onToggleHeatmap: () => void;
+  activeSources: Set<string>;
+  onToggleSource: (source: string) => void;
 }
+
+const ALL_SOURCES = ["gdelt", "acled", "rss", "bluesky", "wikipedia"];
 
 export default function FilterBar({
   activeTypes,
   onToggleType,
   showHeatmap,
   onToggleHeatmap,
+  activeSources,
+  onToggleSource,
 }: Props) {
   return (
     <div className="filter-bar">
       <span className="filter-bar-title">SENTINEL</span>
+
+      <div className="filter-group">
+        {ALL_SOURCES.map((src) => {
+          const active = activeSources.has(src);
+          return (
+            <button
+              key={src}
+              className={`filter-chip ${active ? "active" : ""}`}
+              style={{
+                borderColor: "#88aaff",
+                backgroundColor: active ? "rgba(136, 170, 255, 0.2)" : "transparent",
+                color: active ? "#88aaff" : "#8a8a9a",
+              }}
+              onClick={() => onToggleSource(src)}
+            >
+              {src}
+            </button>
+          );
+        })}
+      </div>
 
       <div className="filter-group">
         {EVENT_TYPES.map((type) => {

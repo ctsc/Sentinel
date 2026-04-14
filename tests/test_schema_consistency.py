@@ -10,7 +10,7 @@ import json
 import uuid
 
 import pytest
-from kafka import KafkaConsumer
+from kafka import KafkaConsumer, TopicPartition
 
 from ingestion.config import KAFKA_TOPICS
 
@@ -24,15 +24,19 @@ REQUIRED_GEO = {"lat", "lon", "country_code", "location_name"}
 
 
 def _consume_one(topic: str, timeout_ms: int = 10000) -> dict | None:
-    """Consume a single event from a topic."""
+    """Consume a single event from a topic.
+
+    Uses manual partition assignment (no group_id) to avoid a kafka-python-ng
+    coordinator bug on Python 3.12 Windows.
+    """
     consumer = KafkaConsumer(
-        topic,
         bootstrap_servers=KAFKA_BOOTSTRAP,
-        auto_offset_reset="earliest",
         consumer_timeout_ms=timeout_ms,
         value_deserializer=lambda v: json.loads(v.decode("utf-8")),
-        group_id=f"test-consistency-{uuid.uuid4().hex[:8]}",
     )
+    tp = TopicPartition(topic, 0)
+    consumer.assign([tp])
+    consumer.seek_to_beginning(tp)
     event = None
     for msg in consumer:
         event = msg.value

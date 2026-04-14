@@ -12,22 +12,97 @@ All events: dedup → sink.
 import json
 import logging
 import os
+import re
 import signal
 import sys
 import time
+from datetime import datetime, timedelta, timezone
 
-from kafka import KafkaConsumer
+from kafka import KafkaConsumer, KafkaProducer
 
+from ingestion.config import MAX_EVENT_AGE_DAYS
 from processing.nlp.ner import extract_locations
 from processing.nlp.classifier import classify_text, classify_cameo, classify_acled
 from processing.nlp.geocoder import geocode_entities
 from processing.dedup import Deduplicator
 from processing.sink import CassandraSink
 
+# Matches a 4-digit year 1900-2024 anywhere in text — used to drop Wikipedia
+# edits that are clearly about historical events (e.g. "2015 Paris attacks").
+_OLD_YEAR_RE = re.compile(r"\b(19\d{2}|20[0-1]\d|202[0-4])\b")
+
+# Non-Latin script ranges — Cyrillic, Arabic, CJK, Thai, Hebrew, Devanagari etc.
+_NON_LATIN_RE = re.compile(
+    r"[\u0400-\u04FF"   # Cyrillic
+    r"\u0590-\u05FF"    # Hebrew
+    r"\u0600-\u06FF"    # Arabic
+    r"\u0900-\u097F"    # Devanagari
+    r"\u0E00-\u0E7F"    # Thai
+    r"\u3040-\u30FF"    # Japanese hiragana/katakana
+    r"\u3400-\u4DBF"    # CJK Extension A
+    r"\u4E00-\u9FFF"    # CJK Unified
+    r"\uAC00-\uD7AF"    # Hangul
+    r"]"
+)
+_LATIN_LETTER_RE = re.compile(r"[A-Za-z]")
+
+
+def _is_english(text: str) -> bool:
+    """Heuristic: text counts as English if it has Latin letters and very
+    little non-Latin script. Catches Bluesky posts in Russian, Arabic, CJK, etc."""
+    if not text:
+        return True  # nothing to judge — let it through
+    sample = text[:400]
+    latin = len(_LATIN_LETTER_RE.findall(sample))
+    non_latin = len(_NON_LATIN_RE.findall(sample))
+    if non_latin > 5 and non_latin > latin * 0.3:
+        return False
+    return latin >= 5  # require at least a handful of Latin letters
+
 logger = logging.getLogger(__name__)
 
 STRUCTURED_SOURCES = {"gdelt", "acled"}
 UNSTRUCTURED_SOURCES = {"rss", "bluesky", "wikipedia"}
+
+
+def _is_fresh(event: dict) -> bool:
+    """Return False for events we should drop as stale.
+
+    - Hard cutoff: any event whose timestamp year is < current year is dropped.
+    - Soft cutoff: any event older than MAX_EVENT_AGE_DAYS is dropped.
+    - Wikipedia: reject articles whose title/text references a past year
+      (catches edits to historical-event articles like "2015 Paris attacks").
+    - ACLED is exempt — free-tier accounts only return events under a
+      ~12-month embargo, so these are legitimately older but still real.
+    """
+    if event.get("source") == "acled":
+        return True
+
+    now = datetime.now(timezone.utc)
+    current_year = now.year
+
+    ts = event.get("timestamp")
+    if ts:
+        try:
+            event_time = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+            if event_time.tzinfo is None:
+                event_time = event_time.replace(tzinfo=timezone.utc)
+            # Hard year cutoff
+            if event_time.year < current_year:
+                return False
+            # Age window
+            if now - event_time > timedelta(days=MAX_EVENT_AGE_DAYS):
+                return False
+        except (ValueError, TypeError):
+            pass
+
+    # Wikipedia / unstructured sources: reject anything whose text mentions a past year.
+    if event.get("source") in ("wikipedia", "rss"):
+        hay = (event.get("title") or "") + " " + (event.get("raw_text") or "")
+        if _OLD_YEAR_RE.search(hay):
+            return False
+
+    return True
 
 ALL_TOPICS = [
     "sentinel.raw.gdelt",
@@ -36,6 +111,8 @@ ALL_TOPICS = [
     "sentinel.raw.bluesky",
     "sentinel.raw.wikipedia",
 ]
+
+ENRICHED_TOPIC = "sentinel.enriched"
 
 
 def _compute_severity(event: dict) -> int:
@@ -173,6 +250,7 @@ class SentinelConsumer:
         self._enable_cassandra = enable_cassandra
 
         self._consumer = None
+        self._producer = None  # Re-publishes enriched events for the WebSocket live feed
         self._dedup = Deduplicator()
         self._sink = CassandraSink() if enable_cassandra else None
         self._running = False
@@ -195,6 +273,14 @@ class SentinelConsumer:
 
         if self._sink:
             self._sink.connect()
+
+        self._producer = KafkaProducer(
+            bootstrap_servers=self._bootstrap_servers,
+            value_serializer=lambda v: json.dumps(v, default=str).encode("utf-8"),
+            retries=3,
+            acks=1,
+            linger_ms=50,
+        )
 
         self._running = True
         self._start_time = time.time()
@@ -236,6 +322,17 @@ class SentinelConsumer:
                     try:
                         event = message.value
 
+                        # Freshness filter — drop events older than the window
+                        if not _is_fresh(event):
+                            self._events_dropped += 1
+                            continue
+
+                        # Language filter — keep English events only
+                        text = (event.get("title") or "") + " " + (event.get("raw_text") or "")
+                        if not _is_english(text):
+                            self._events_dropped += 1
+                            continue
+
                         # Dedup check
                         if self._dedup.is_duplicate(event):
                             self._events_dropped += 1
@@ -247,6 +344,13 @@ class SentinelConsumer:
                         # Sink to Cassandra
                         if self._sink:
                             self._sink.write(enriched)
+
+                        # Re-publish to the enriched topic for the WebSocket live feed
+                        if self._producer:
+                            try:
+                                self._producer.send(ENRICHED_TOPIC, value=enriched)
+                            except Exception as e:
+                                logger.debug("Failed to publish enriched event: %s", e)
 
                         self._events_processed += 1
 
@@ -274,6 +378,12 @@ class SentinelConsumer:
         self._running = False
         if self._consumer:
             self._consumer.close()
+        if self._producer:
+            try:
+                self._producer.flush(timeout=5)
+                self._producer.close(timeout=5)
+            except Exception:
+                pass
         if self._sink:
             self._sink.close()
         self._log_stats()

@@ -10,7 +10,7 @@ import json
 import uuid
 
 import pytest
-from kafka import KafkaConsumer
+from kafka import KafkaConsumer, TopicPartition
 
 from ingestion.config import KAFKA_TOPICS
 
@@ -75,18 +75,21 @@ def _validate_event_schema(event: dict) -> list[str]:
 
 
 def _consume_events(topic: str, max_events: int = 5, timeout_ms: int = 15000) -> list[dict]:
-    """Consume up to max_events from a topic, return deserialized events."""
+    """Consume up to max_events from a topic, return deserialized events.
+
+    Uses manual partition assignment (no group_id) to avoid a kafka-python-ng
+    coordinator bug on Python 3.12 Windows.
+    """
     import time
-    # Small delay to let Kafka replicate after producer flush
     time.sleep(1)
     consumer = KafkaConsumer(
-        topic,
         bootstrap_servers=KAFKA_BOOTSTRAP,
-        auto_offset_reset="earliest",
         consumer_timeout_ms=timeout_ms,
         value_deserializer=lambda v: json.loads(v.decode("utf-8")),
-        group_id=f"test-producers-{uuid.uuid4().hex[:8]}",
     )
+    tp = TopicPartition(topic, 0)
+    consumer.assign([tp])
+    consumer.seek_to_beginning(tp)
     events = []
     for msg in consumer:
         events.append(msg.value)
@@ -143,9 +146,9 @@ class TestAcledProducer:
         producer.run_once()
 
         events = _consume_events(KAFKA_TOPICS["acled"])
-        # ACLED may return 0 events if no API key is set
+        # ACLED may return 0 events if OAuth credentials are missing or invalid
         if not events:
-            pytest.skip("No ACLED events (check ACLED_API_KEY in .env)")
+            pytest.skip("No ACLED events (check ACLED_EMAIL + ACLED_PASSWORD in .env)")
 
         for event in events:
             errors = _validate_event_schema(event)

@@ -17,7 +17,13 @@
       "Bash(python -m pytest tests/test_producers.py::TestGdeltProducer tests/test_producers.py::TestRssProducer tests/test_producers.py::TestAcledProducer -v 2>&1)",
       "Bash(python -m pytest tests/test_producers.py::TestWikipediaProducer::test_produces_valid_schema -v 2>&1)",
       "Bash(python -m pytest tests/test_producers.py::TestBlueskyProducer::test_produces_valid_schema -v 2>&1)",
-      "Bash(python -m pytest tests/test_schema_consistency.py -v 2>&1)"
+      "Bash(python -m pytest tests/test_schema_consistency.py -v 2>&1)",
+      "WebFetch(domain:acleddata.com)",
+      "Bash(python:*)",
+      "WebFetch(domain:apidocs.acleddata.com)",
+      "Bash(docker-compose ps:*)",
+      "Bash(npm list:*)",
+      "Bash(npm install:*)"
     ]
   }
 }

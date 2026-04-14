@@ -131,6 +131,15 @@ class BlueskyProducer(BaseProducer):
                     except Exception:
                         continue
 
+                    # op.path is "app.bsky.feed.post/{rkey}" — extract rkey so we
+                    # can build a real bsky.app URL for click-through.
+                    rkey = op.path.split("/", 1)[1] if "/" in op.path else None
+                    post_url = (
+                        f"https://bsky.app/profile/{commit.repo}/post/{rkey}"
+                        if rkey and commit.repo
+                        else None
+                    )
+
                     for _cid, block in car.blocks.items():
                         if not isinstance(block, dict):
                             continue
@@ -144,8 +153,8 @@ class BlueskyProducer(BaseProducer):
                             raw_text=text,
                             title=None,
                             timestamp=datetime.now(timezone.utc).isoformat(),
-                            source_url=None,
-                            metadata={"did": commit.repo},
+                            source_url=post_url,
+                            metadata={"did": commit.repo, "rkey": rkey},
                         )
                         collected.append(event)
 
@@ -194,3 +203,13 @@ class BlueskyProducer(BaseProducer):
             self.emit(event)
 
         logger.info("[bluesky] Poll complete — emitted %d events", len(collected))
+
+
+if __name__ == "__main__":
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)-8s %(name)s — %(message)s",
+    )
+    producer = BlueskyProducer()
+    # Bluesky poll() runs a 30s batch window internally; loop every 5s between batches
+    producer.run(interval=5)

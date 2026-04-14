@@ -17,6 +17,8 @@ KAFKA_TOPICS = {
     "bluesky": "sentinel.raw.bluesky",
     "wikipedia": "sentinel.raw.wikipedia",
     "telegram": "sentinel.raw.telegram",
+    # Enriched (post-NLP) events re-published by the consumer for live UI.
+    "enriched": "sentinel.enriched",
 }
 
 # ---------------------------------------------------------------------------
@@ -35,23 +37,56 @@ GDELT_POLL_INTERVAL = 900  # 15 minutes
 
 # ---------------------------------------------------------------------------
 # ACLED
+# ACLED uses OAuth (email + password → bearer token), not static API keys.
 # ---------------------------------------------------------------------------
-ACLED_API_URL = "https://api.acleddata.com/acled/read"
-ACLED_API_KEY = os.getenv("ACLED_API_KEY", "")
+ACLED_API_URL = "https://acleddata.com/api/acled/read"
+ACLED_OAUTH_URL = "https://acleddata.com/oauth/token"
 ACLED_EMAIL = os.getenv("ACLED_EMAIL", "")
+ACLED_PASSWORD = os.getenv("ACLED_PASSWORD", "")
 ACLED_POLL_INTERVAL = 3600  # 1 hour (conservative — 500 req/day limit)
-ACLED_PAGE_SIZE = 5000
+ACLED_PAGE_SIZE = 500
+ACLED_MAX_PAGES_PER_POLL = 1
+
+# ---------------------------------------------------------------------------
+# Event freshness filter (applied by the consumer)
+# Drop any event whose timestamp is older than this, regardless of source.
+# Keeps the dashboard focused on real-time conflict activity.
+# ---------------------------------------------------------------------------
+MAX_EVENT_AGE_DAYS = 45
+# On first poll (no watermark yet), only pull events from the last N days.
+# Without this, ACLED returns oldest-first from 1997 and would exhaust the 500 req/day quota.
+# Keep in sync with MAX_EVENT_AGE_DAYS so the consumer doesn't filter out everything we pull.
+ACLED_BACKFILL_DAYS = 45
 
 # ---------------------------------------------------------------------------
 # RSS Feeds
 # ---------------------------------------------------------------------------
 RSS_FEEDS = [
+    # Mainstream world news
     {"name": "BBC World", "url": "https://feeds.bbci.co.uk/news/world/rss.xml"},
+    {"name": "BBC Middle East", "url": "https://feeds.bbci.co.uk/news/world/middle_east/rss.xml"},
     {"name": "Al Jazeera", "url": "https://www.aljazeera.com/xml/rss/all.xml"},
-    {
-        "name": "Google News (World)",
-        "url": "https://news.google.com/rss/topics/CAAqJggKIiBDQkFTRWdvSUwyMHZNRGx1YlY4U0FtVnVHZ0pWVXigAQ",
-    },
+    {"name": "Guardian World", "url": "https://www.theguardian.com/world/rss"},
+    {"name": "DW World", "url": "https://rss.dw.com/rdf/rss-en-world"},
+    {"name": "France24 World", "url": "https://www.france24.com/en/rss"},
+    {"name": "CNN World", "url": "http://rss.cnn.com/rss/edition_world.rss"},
+    {"name": "NPR World", "url": "https://feeds.npr.org/1004/rss.xml"},
+    {"name": "NBC World", "url": "http://feeds.nbcnews.com/nbcnews/public/world"},
+    # Conflict / military focus
+    {"name": "Times of Israel", "url": "https://www.timesofisrael.com/feed/"},
+    {"name": "Al Monitor", "url": "https://www.al-monitor.com/rss"},
+    {"name": "Defense News", "url": "https://www.defensenews.com/arc/outboundfeeds/rss/?outputType=xml"},
+    {"name": "Kyiv Independent", "url": "https://kyivindependent.com/rss/"},
+    # Reddit conflict subs (RSS, real-time, no auth)
+    {"name": "Reddit r/worldnews", "url": "https://www.reddit.com/r/worldnews/new.rss"},
+    {"name": "Reddit r/CombatFootage", "url": "https://www.reddit.com/r/CombatFootage/new.rss"},
+    {"name": "Reddit r/UkraineWarVideoReport", "url": "https://www.reddit.com/r/UkraineWarVideoReport/new.rss"},
+    {"name": "Reddit r/MilitaryNews", "url": "https://www.reddit.com/r/MilitaryNews/new.rss"},
+    {"name": "Reddit r/syriancivilwar", "url": "https://www.reddit.com/r/syriancivilwar/new.rss"},
+    # Google News feeds removed — their CBM... redirect URLs are unreliable
+    # and often resolve to a Google News search page instead of the actual
+    # publisher article, which violates the "every event has a real source
+    # link" rule in CLAUDE.md.
 ]
 RSS_POLL_INTERVAL = 60  # seconds
 

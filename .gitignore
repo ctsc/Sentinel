@@ -1,0 +1,120 @@
+# ---------------------------------------------------------------------------
+# Secrets — NEVER commit these
+# ---------------------------------------------------------------------------
+.env
+.env.local
+.env.*.local
+frontend/.env
+frontend/.env.local
+*.pem
+*.key
+credentials.json
+secrets.json
+
+# ---------------------------------------------------------------------------
+# Python
+# ---------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+*.manifest
+*.spec
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+.python-version
+
+# Testing / coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+.hypothesis/
+
+# Type checkers
+.mypy_cache/
+.dmypy.json
+.pyre/
+.pytype/
+.ruff_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# ---------------------------------------------------------------------------
+# Node / frontend
+# ---------------------------------------------------------------------------
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/*.tsbuildinfo
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# ---------------------------------------------------------------------------
+# spaCy models (large — download via `python -m spacy download`)
+# ---------------------------------------------------------------------------
+en_core_web_lg/
+en_core_web_sm/
+en_core_web_md/
+
+# ---------------------------------------------------------------------------
+# Data & generated artifacts
+# ---------------------------------------------------------------------------
+data/*.parquet
+data/*.jsonl
+data/raw/
+benchmark/results/*.csv
+benchmark/results/*.png
+benchmark/results/*.json
+!data/geo_cache_seed.json
+
+# ---------------------------------------------------------------------------
+# Docker / Kafka / Cassandra volumes (docker-compose persistence)
+# ---------------------------------------------------------------------------
+kafka-data/
+zookeeper-data/
+cassandra-data/
+volumes/
+
+# ---------------------------------------------------------------------------
+# IDE / editor
+# ---------------------------------------------------------------------------
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---------------------------------------------------------------------------
+# Logs
+# ---------------------------------------------------------------------------
+*.log
+logs/
+
+# ---------------------------------------------------------------------------
+# Claude Code local settings (keep shared settings.json, ignore local overrides)
+# ---------------------------------------------------------------------------
+.claude/settings.local.json
