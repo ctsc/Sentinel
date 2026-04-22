@@ -73,14 +73,12 @@ const MapViewComponent = forwardRef<MapViewHandle, Props>(
     );
 
     const layers = useMemo(() => {
-      const result: unknown[] = [];
-      if (showHeatmap) result.push(createHeatmapLayer(events));
-      result.push(
-        ...createScatterLayers(events, (info) => {
-          if (info.object) onEventClick(info.object);
-        })
-      );
-      return result;
+      const scatterLayers = createScatterLayers(events, (info) => {
+        if (info.object) onEventClick(info.object);
+      });
+      return showHeatmap
+        ? [createHeatmapLayer(events), ...scatterLayers]
+        : scatterLayers;
     }, [events, showHeatmap, onEventClick]);
 
     const getTooltip = useCallback(({ object }: { object?: SentinelEvent }) => {
