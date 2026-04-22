@@ -52,16 +52,6 @@ export function getEventTitle(e: SentinelEvent): string {
   return where ? `${src} report from ${where}` : `${src} report`;
 }
 
-/** Unicode symbol per event type — minimal geometric glyphs. */
-export const EVENT_TYPE_ICONS: Record<string, string> = {
-  conflict: "▲",   // up triangle — escalation
-  protest: "●",    // filled circle
-  disaster: "◆",   // diamond
-  political: "■",  // square
-  terrorism: "✕",  // crisp X
-  other: "·",      // tiny dot
-};
-
 /**
  * Infer an event_type from raw producer output when the consumer hasn't
  * classified yet. GDELT uses CAMEO codes (18x/19x = conflict, 14x = protest,

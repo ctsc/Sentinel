@@ -5,7 +5,7 @@ import Map from "react-map-gl/mapbox";
 import "mapbox-gl/dist/mapbox-gl.css";
 import type { SentinelEvent } from "../utils/types";
 import { classifyEvent, getEventTitle } from "../utils/types";
-import { createScatterLayer } from "../layers/scatter";
+import { createScatterLayers } from "../layers/scatter";
 import { createHeatmapLayer } from "../layers/heatmap";
 
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN ?? "";
@@ -73,10 +73,10 @@ const MapViewComponent = forwardRef<MapViewHandle, Props>(
     );
 
     const layers = useMemo(() => {
-      const result = [];
+      const result: unknown[] = [];
       if (showHeatmap) result.push(createHeatmapLayer(events));
       result.push(
-        createScatterLayer(events, (info) => {
+        ...createScatterLayers(events, (info) => {
           if (info.object) onEventClick(info.object);
         })
       );
