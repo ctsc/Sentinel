@@ -13,7 +13,8 @@ const ALL_TYPES = new Set(Object.keys(EVENT_TYPE_COLORS));
 const ALL_SOURCES = new Set(["gdelt", "acled", "rss", "bluesky", "wikipedia"]);
 
 function App() {
-  const { events: liveEvents, connected, eventsPerMinute } = useWebSocket();
+  const { events: liveEvents, connected, eventsPerMinute, lastEventTime, reconnecting } = useWebSocket();
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<SentinelEvent | null>(null);
   const mapRef = useRef<MapViewHandle | null>(null);
 
@@ -68,6 +69,9 @@ function App() {
 
   return (
     <div className="app">
+      {reconnecting && (
+        <div className="reconnect-banner">Reconnecting to live feed...</div>
+      )}
       <FilterBar
         activeTypes={activeTypes}
         onToggleType={handleToggleType}
@@ -82,10 +86,25 @@ function App() {
         showHeatmap={showHeatmap}
         onEventClick={handleEventClick}
       />
-      <EventsSidebar
-        events={filteredEvents}
-        onEventClick={handleEventClick}
-      />
+      {liveEvents.length === 0 && (
+        <div className="empty-state">
+          <div className="empty-state-pulse" />
+          <p className="empty-state-text">Connecting to live feeds...</p>
+        </div>
+      )}
+      <button
+        className="sidebar-toggle"
+        onClick={() => setSidebarCollapsed((v) => !v)}
+        title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+      >
+        {sidebarCollapsed ? "\u25C0" : "\u25B6"}
+      </button>
+      {!sidebarCollapsed && (
+        <EventsSidebar
+          events={filteredEvents}
+          onEventClick={handleEventClick}
+        />
+      )}
       <EventPanel
         event={selectedEvent}
         onClose={() => setSelectedEvent(null)}
@@ -96,6 +115,8 @@ function App() {
         eventsPerMinute={eventsPerMinute}
         connected={connected}
         sourcesActive={sourcesActive}
+        events={liveEvents}
+        lastEventTime={lastEventTime}
       />
     </div>
   );

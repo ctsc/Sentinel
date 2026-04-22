@@ -8,6 +8,7 @@ Each client gets its own asyncio.Queue to avoid backpressure issues.
 import asyncio
 import json
 import logging
+import os
 import queue as stdqueue
 import threading
 from typing import Set
@@ -33,45 +34,68 @@ def _kafka_thread_loop():
     creator thread and fails with 'Invalid file descriptor: -1' on Windows
     if polled from a different thread (which asyncio.to_thread does via a
     pool). Keeping the consumer on one pinned thread avoids that.
+
+    Includes retry with exponential backoff: if the consumer crashes, it
+    reconnects after 5s, 10s, 30s, then caps at 30s.
     """
     from kafka import KafkaConsumer as SyncKafkaConsumer
 
-    try:
-        consumer = SyncKafkaConsumer(
-            "sentinel.enriched",
-            bootstrap_servers="localhost:9092",
-            group_id="sentinel-ws-live",
-            auto_offset_reset="latest",
-            value_deserializer=lambda m: json.loads(m.decode("utf-8")),
-            consumer_timeout_ms=1000,
-        )
-    except Exception as e:
-        logger.error("Failed to connect Kafka for WebSocket feed: %s", e)
-        return
+    backoff_schedule = [5, 10, 30]  # seconds
+    attempt = 0
 
-    logger.info("WebSocket Kafka consumer thread started")
-
-    try:
-        while not _kafka_stop_event.is_set():
-            try:
-                records = consumer.poll(timeout_ms=500)
-            except Exception as e:
-                logger.error("Kafka poll error: %s", e)
-                _kafka_stop_event.wait(1.0)
-                continue
-
-            for _tp, msgs in records.items():
-                for msg in msgs:
-                    try:
-                        _kafka_raw_queue.put_nowait(msg.value)
-                    except stdqueue.Full:
-                        pass  # Drop oldest policy: just drop the new one
-    finally:
+    while not _kafka_stop_event.is_set():
+        consumer = None
         try:
-            consumer.close()
-        except Exception:
-            pass
-        logger.info("WebSocket Kafka consumer thread stopped")
+            consumer = SyncKafkaConsumer(
+                "sentinel.enriched",
+                bootstrap_servers=os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092"),
+                group_id="sentinel-ws-live",
+                auto_offset_reset="latest",
+                value_deserializer=lambda m: json.loads(m.decode("utf-8")),
+                consumer_timeout_ms=1000,
+            )
+        except Exception as e:
+            logger.error("Failed to connect Kafka for WebSocket feed: %s", e)
+            delay = backoff_schedule[min(attempt, len(backoff_schedule) - 1)]
+            logger.info("Retrying Kafka connection in %ds (attempt %d)", delay, attempt + 1)
+            attempt += 1
+            _kafka_stop_event.wait(delay)
+            continue
+
+        # Connection succeeded — reset attempt counter
+        attempt = 0
+        logger.info("WebSocket Kafka consumer thread started")
+
+        try:
+            while not _kafka_stop_event.is_set():
+                try:
+                    records = consumer.poll(timeout_ms=500)
+                except Exception as e:
+                    logger.error("Kafka poll error: %s", e)
+                    _kafka_stop_event.wait(1.0)
+                    continue
+
+                for _tp, msgs in records.items():
+                    for msg in msgs:
+                        try:
+                            _kafka_raw_queue.put_nowait(msg.value)
+                        except stdqueue.Full:
+                            pass  # Drop oldest policy: just drop the new one
+        except Exception as e:
+            logger.error("WebSocket Kafka consumer thread crashed: %s", e)
+        finally:
+            try:
+                consumer.close()
+            except Exception:
+                pass
+            logger.info("WebSocket Kafka consumer thread stopped")
+
+        # If we get here, the consumer crashed — retry with backoff
+        if not _kafka_stop_event.is_set():
+            delay = backoff_schedule[min(attempt, len(backoff_schedule) - 1)]
+            logger.info("Restarting Kafka consumer in %ds (attempt %d)", delay, attempt + 1)
+            attempt += 1
+            _kafka_stop_event.wait(delay)
 
 
 async def _pump_to_clients():

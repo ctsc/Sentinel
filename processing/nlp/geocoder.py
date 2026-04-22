@@ -8,6 +8,7 @@ Only called for unstructured sources (RSS, Bluesky, Wikipedia).
 GDELT/ACLED already have coordinates — pass through directly.
 """
 
+import atexit
 import json
 import logging
 import os
@@ -22,9 +23,39 @@ _geo_cache: dict = {}
 _nominatim_hits = 0
 _cache_hits = 0
 
+# Learned entries accumulated during this session (to persist on shutdown)
+_learned_entries: dict = {}
+_DATA_DIR = os.path.join(Path(__file__).parent.parent.parent, "data")
+_LEARNED_CACHE_PATH = os.path.join(_DATA_DIR, "geo_cache_learned.json")
+
+
+def _flush_learned_cache():
+    """Persist learned geocoding entries to disk."""
+    if not _learned_entries:
+        return
+    try:
+        # Merge with existing file if present
+        existing = {}
+        if os.path.exists(_LEARNED_CACHE_PATH):
+            try:
+                with open(_LEARNED_CACHE_PATH, "r", encoding="utf-8") as f:
+                    existing = json.load(f)
+            except (json.JSONDecodeError, OSError):
+                pass
+        existing.update(_learned_entries)
+        os.makedirs(_DATA_DIR, exist_ok=True)
+        with open(_LEARNED_CACHE_PATH, "w", encoding="utf-8") as f:
+            json.dump(existing, f, ensure_ascii=False, indent=2)
+        logger.info("Flushed %d learned geocoding entries to disk", len(_learned_entries))
+    except OSError as e:
+        logger.warning("Failed to flush learned geocoding cache: %s", e)
+
+
+atexit.register(_flush_learned_cache)
+
 
 def load_cache(cache_path: Optional[str] = None):
-    """Load the pre-seeded geocoding cache from JSON."""
+    """Load the pre-seeded geocoding cache and learned cache from JSON."""
     global _geo_cache
 
     if cache_path is None:
@@ -37,11 +68,23 @@ def load_cache(cache_path: Optional[str] = None):
             raw = json.load(f)
         # Normalize keys to lowercase for case-insensitive lookup
         _geo_cache = {k.lower(): v for k, v in raw.items()}
-        logger.info("Geocoding cache loaded: %d entries", len(_geo_cache))
+        logger.info("Geocoding cache loaded: %d entries from seed", len(_geo_cache))
     except FileNotFoundError:
         logger.warning("Geocoding cache file not found: %s", cache_path)
     except json.JSONDecodeError as e:
         logger.error("Invalid geocoding cache JSON: %s", e)
+
+    # Also load previously learned entries
+    try:
+        with open(_LEARNED_CACHE_PATH, "r", encoding="utf-8") as f:
+            learned = json.load(f)
+        for k, v in learned.items():
+            _geo_cache[k.lower()] = v
+        logger.info("Geocoding cache loaded: %d entries from learned cache", len(learned))
+    except FileNotFoundError:
+        pass
+    except json.JSONDecodeError as e:
+        logger.warning("Invalid learned geocoding cache JSON: %s", e)
 
 
 def _nominatim_lookup(location: str) -> Optional[dict]:
@@ -67,6 +110,8 @@ def _nominatim_lookup(location: str) -> Optional[dict]:
             }
             # Cache the result for future lookups
             _geo_cache[location.lower()] = entry
+            # Record for persistence
+            _learned_entries[location.lower()] = entry
             logger.debug("Nominatim resolved '%s' → (%s, %s)", location, result.latitude, result.longitude)
             return entry
         else:

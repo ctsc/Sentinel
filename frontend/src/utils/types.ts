@@ -103,3 +103,30 @@ export function classifyEvent(e: SentinelEvent): string {
   if (/\b(election|sanction|treaty|parliament|summit|diplomat)\b/.test(hay)) return "political";
   return "other";
 }
+
+/** Source brand colors for visual identification. */
+export const SOURCE_COLORS: Record<string, string> = {
+  gdelt: "#4488ff",
+  acled: "#ff4444",
+  rss: "#44cc66",
+  bluesky: "#0085ff",
+  wikipedia: "#999999",
+  telegram: "#0088cc",
+};
+
+/** Format a timestamp as relative time ("3 min ago", "2h ago", etc.). */
+export function formatRelativeTime(iso: string): string {
+  const now = Date.now();
+  const then = new Date(iso).getTime();
+  if (isNaN(then)) return "";
+  const diffSec = Math.max(0, Math.floor((now - then) / 1000));
+
+  if (diffSec < 5) return "just now";
+  if (diffSec < 60) return `${diffSec}s ago`;
+  const mins = Math.floor(diffSec / 60);
+  if (mins < 60) return `${mins} min ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days}d ago`;
+}

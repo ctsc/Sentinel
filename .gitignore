@@ -118,3 +118,8 @@ logs/
 # Claude Code local settings (keep shared settings.json, ignore local overrides)
 # ---------------------------------------------------------------------------
 .claude/settings.local.json
+
+# ---------------------------------------------------------------------------
+# Deployment notes (local-only — may contain IPs, account specifics)
+# ---------------------------------------------------------------------------
+DEPLOY.md

@@ -96,10 +96,13 @@ def _is_fresh(event: dict) -> bool:
         except (ValueError, TypeError):
             pass
 
-    # Wikipedia / unstructured sources: reject anything whose text mentions a past year.
-    if event.get("source") in ("wikipedia", "rss"):
-        hay = (event.get("title") or "") + " " + (event.get("raw_text") or "")
-        if _OLD_YEAR_RE.search(hay):
+    # Wikipedia: reject articles whose title references a past year
+    # (catches edits to historical-event articles like "2015 Paris attacks").
+    # Only check title, not body — body may legitimately reference past years.
+    # RSS is exempt: current news often references past years in context.
+    if event.get("source") == "wikipedia":
+        title = event.get("title") or ""
+        if _OLD_YEAR_RE.search(title):
             return False
 
     return True

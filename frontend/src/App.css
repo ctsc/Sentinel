@@ -26,6 +26,7 @@
   letter-spacing: 4px;
   color: #00ffc8;
   margin-right: 12px;
+  text-shadow: 0 0 8px rgba(0, 255, 200, 0.5), 0 0 20px rgba(0, 255, 200, 0.2);
 }
 
 .filter-group {
@@ -368,4 +369,194 @@
   text-align: center;
   color: #6a6a7a;
   font-size: 12px;
+}
+
+/* ------------------------------------------------------------------ */
+/* Reconnect banner                                                     */
+/* ------------------------------------------------------------------ */
+.reconnect-banner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  text-align: center;
+  padding: 6px 16px;
+  background: rgba(255, 180, 0, 0.92);
+  color: #1a1a00;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  animation: reconnect-pulse 2s ease-in-out infinite;
+}
+
+@keyframes reconnect-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+/* ------------------------------------------------------------------ */
+/* Empty state                                                          */
+/* ------------------------------------------------------------------ */
+.empty-state {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 8;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  pointer-events: none;
+}
+
+.empty-state-pulse {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 2px solid rgba(0, 255, 200, 0.5);
+  animation: pulse-ring 2s ease-in-out infinite;
+}
+
+@keyframes pulse-ring {
+  0% { transform: scale(0.8); opacity: 1; }
+  50% { transform: scale(1.3); opacity: 0.3; }
+  100% { transform: scale(0.8); opacity: 1; }
+}
+
+.empty-state-text {
+  color: #8a8a9a;
+  font-size: 14px;
+  letter-spacing: 1px;
+}
+
+/* ------------------------------------------------------------------ */
+/* Sidebar toggle button                                                */
+/* ------------------------------------------------------------------ */
+.sidebar-toggle {
+  position: absolute;
+  top: 50%;
+  right: 360px;
+  transform: translateY(-50%);
+  z-index: 11;
+  width: 24px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 10, 26, 0.88);
+  border: 1px solid rgba(0, 255, 200, 0.2);
+  border-right: none;
+  border-radius: 4px 0 0 4px;
+  color: #00ffc8;
+  font-size: 10px;
+  cursor: pointer;
+  transition: right 0.2s ease, background 0.15s ease;
+}
+
+.sidebar-toggle:hover {
+  background: rgba(0, 255, 200, 0.1);
+}
+
+/* When sidebar is collapsed, move toggle to right edge */
+.app:has(.events-sidebar) .sidebar-toggle {
+  right: 360px;
+}
+
+.app:not(:has(.events-sidebar)) .sidebar-toggle {
+  right: 0;
+  border-right: 1px solid rgba(0, 255, 200, 0.2);
+  border-radius: 4px;
+}
+
+/* ------------------------------------------------------------------ */
+/* Stats bar — per-source items                                         */
+/* ------------------------------------------------------------------ */
+.stats-sources {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.stats-source-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: 0.5px;
+}
+
+.stats-source-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.stats-source-count {
+  font-size: 10px;
+  color: #6a6a7a;
+  margin-left: 2px;
+}
+
+.stats-last-event {
+  color: #00ffc8;
+  font-size: 12px;
+}
+
+/* ------------------------------------------------------------------ */
+/* Event panel — source branding and severity bar                       */
+/* ------------------------------------------------------------------ */
+.event-source-branded {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.event-source-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.event-severity-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.event-severity-label {
+  font-size: 11px;
+  color: #8a8a9a;
+  min-width: 52px;
+}
+
+.event-severity-track {
+  flex: 1;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.event-severity-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.event-severity-value {
+  font-size: 11px;
+  color: #c0c0c0;
+  min-width: 30px;
+  text-align: right;
+}
+
+.event-source-missing {
+  font-size: 12px;
+  color: #6a6a7a;
 }

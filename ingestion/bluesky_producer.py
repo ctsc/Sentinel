@@ -168,15 +168,43 @@ class BlueskyProducer(BaseProducer):
 
         # -------------------------------------------------------------- #
         # Run the firehose in a daemon thread for the batch window.
+        # On error, reconnect with a short delay (up to 3 retries).
         # -------------------------------------------------------------- #
         client = _FirehoseSubscribeReposClient()
+        client_lock = threading.Lock()
 
         def _run_client() -> None:
-            try:
-                client.start(_on_message)
-            except Exception:
-                if not stop_event.is_set():
-                    logger.exception("[bluesky] Firehose client error")
+            nonlocal client
+            max_retries = 3
+            retry_delay = 2  # seconds
+
+            for attempt in range(max_retries + 1):
+                if stop_event.is_set():
+                    return
+                try:
+                    client.start(_on_message)
+                    # start() returns normally when client.stop() is called
+                    return
+                except Exception:
+                    if stop_event.is_set():
+                        return
+                    if attempt < max_retries:
+                        logger.warning(
+                            "[bluesky] Firehose error (attempt %d/%d), reconnecting in %ds",
+                            attempt + 1,
+                            max_retries + 1,
+                            retry_delay,
+                        )
+                        stop_event.wait(retry_delay)
+                        retry_delay = min(retry_delay * 2, 10)
+                        # Create a fresh client for reconnection
+                        with client_lock:
+                            client = _FirehoseSubscribeReposClient()
+                    else:
+                        logger.exception(
+                            "[bluesky] Firehose client failed after %d attempts",
+                            max_retries + 1,
+                        )
 
         thread = threading.Thread(target=_run_client, daemon=True)
         thread.start()
@@ -192,10 +220,11 @@ class BlueskyProducer(BaseProducer):
 
         # Signal the handler to stop, then tear down the client.
         stop_event.set()
-        try:
-            client.stop()
-        except Exception:
-            pass
+        with client_lock:
+            try:
+                client.stop()
+            except Exception:
+                pass
         thread.join(timeout=5)
 
         # Emit all collected events to Kafka.

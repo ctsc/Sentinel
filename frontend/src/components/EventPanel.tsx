@@ -1,5 +1,5 @@
 import type { SentinelEvent } from "../utils/types";
-import { EVENT_TYPE_COLORS, classifyEvent, getEventTitle } from "../utils/types";
+import { EVENT_TYPE_COLORS, SOURCE_COLORS, classifyEvent, getEventTitle, formatRelativeTime } from "../utils/types";
 
 interface Props {
   event: SentinelEvent | null;
@@ -31,9 +31,38 @@ export default function EventPanel({ event, onClose, onLocate }: Props) {
         >
           {type}
         </span>
-        <span>{event.source.toUpperCase()}</span>
-        <span>{new Date(event.timestamp).toLocaleString()}</span>
+        <span className="event-source-branded">
+          <span
+            className="event-source-dot"
+            style={{ background: SOURCE_COLORS[event.source] || "#888" }}
+          />
+          {event.source.toUpperCase()}
+        </span>
+        <span title={new Date(event.timestamp).toLocaleString()}>
+          {formatRelativeTime(event.timestamp)}
+        </span>
       </div>
+
+      {event.severity != null && (
+        <div className="event-severity-bar">
+          <span className="event-severity-label">Severity</span>
+          <div className="event-severity-track">
+            <div
+              className="event-severity-fill"
+              style={{
+                width: `${(event.severity / 10) * 100}%`,
+                background:
+                  event.severity >= 7
+                    ? "#ff4444"
+                    : event.severity >= 4
+                      ? "#ffaa33"
+                      : "#44cc66",
+              }}
+            />
+          </div>
+          <span className="event-severity-value">{event.severity}/10</span>
+        </div>
+      )}
       <p className="event-text">{event.raw_text}</p>
 
       {event.geo?.location_name && (
@@ -46,7 +75,6 @@ export default function EventPanel({ event, onClose, onLocate }: Props) {
       {event.confidence != null && (
         <p className="event-confidence">
           Confidence: {(event.confidence * 100).toFixed(0)}%
-          {event.severity != null && ` | Severity: ${event.severity}/10`}
         </p>
       )}
 
