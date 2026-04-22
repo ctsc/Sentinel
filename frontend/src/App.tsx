@@ -12,8 +12,8 @@ import "./App.css";
 
 const ALL_TYPES = new Set(Object.keys(EVENT_TYPE_COLORS));
 const ALL_SOURCES = new Set(["gdelt", "acled", "rss", "bluesky", "wikipedia"]);
-const HISTORY_HOURS = 168;   // 7 days
-const HISTORY_LIMIT = 2000;  // cap on initial pre-seed
+const HISTORY_HOURS = 168;    // 7 days
+const HISTORY_LIMIT = 10000;  // cap on initial pre-seed
 
 function App() {
   const { events: wsEvents, connected, eventsPerMinute, lastEventTime, reconnecting } = useWebSocket();

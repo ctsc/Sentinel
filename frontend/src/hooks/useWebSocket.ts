@@ -4,7 +4,7 @@ import type { SentinelEvent } from "../utils/types";
 const WS_URL =
   import.meta.env.VITE_WS_URL ||
   `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/ws/live`;
-const MAX_EVENTS = 10000;
+const MAX_EVENTS = 15000;
 
 interface UseWebSocketReturn {
   events: SentinelEvent[];

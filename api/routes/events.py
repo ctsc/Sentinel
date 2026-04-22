@@ -21,7 +21,7 @@ async def get_events(
     event_type: Optional[str] = Query(None, description="Filter by event type"),
     source: Optional[str] = Query(None, description="Filter by source (gdelt, acled, rss, bluesky, wikipedia)"),
     hours: int = Query(168, ge=1, le=8760, description="Sweep window in hours going back from now (default 168 = 7 days, max 8760 = 1 year)"),
-    limit: int = Query(1000, ge=1, le=5000, description="Max results to return"),
+    limit: int = Query(1000, ge=1, le=20000, description="Max results to return"),
 ):
     """Query historical events from Cassandra.
 
