@@ -25,6 +25,7 @@ COPY ingestion/ ./ingestion/
 COPY processing/ ./processing/
 COPY api/ ./api/
 COPY data/ ./data/
+COPY scripts/ ./scripts/
 COPY run_all.py .
 
 CMD ["python", "run_all.py"]
