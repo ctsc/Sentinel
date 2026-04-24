@@ -1,6 +1,5 @@
-import { useMemo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import type { SentinelEvent } from "../utils/types";
-import { EVENT_TYPE_COLORS, classifyEvent, getEventTitle } from "../utils/types";
 
 interface Props {
   events: SentinelEvent[];
@@ -9,7 +8,7 @@ interface Props {
 
 const MAX_VISIBLE = 200;
 
-export default function EventsSidebar({ events, onEventClick }: Props) {
+function EventsSidebar({ events, onEventClick }: Props) {
   const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest");
   const [locationFilter, setLocationFilter] = useState("");
 
@@ -56,8 +55,8 @@ export default function EventsSidebar({ events, onEventClick }: Props) {
 
       <ul className="sidebar-list">
         {visible.map((e) => {
-          const type = classifyEvent(e);
-          const color = EVENT_TYPE_COLORS[type] ?? [150, 150, 150];
+          const type = e._type ?? "other";
+          const color = e._color ?? [150, 150, 150];
           const when = e.timestamp
             ? new Date(e.timestamp).toLocaleString(undefined, {
                 month: "short",
@@ -79,7 +78,7 @@ export default function EventsSidebar({ events, onEventClick }: Props) {
                 </span>
                 <span className="sidebar-item-time">{when}</span>
               </div>
-              <div className="sidebar-item-title">{getEventTitle(e)}</div>
+              <div className="sidebar-item-title">{e._title ?? e.title ?? e.raw_text}</div>
               <div className="sidebar-item-meta">
                 {e.geo?.location_name ?? e.geo?.country_code ?? "—"}
                 <span className="sidebar-item-source"> · {e.source}</span>
@@ -94,3 +93,5 @@ export default function EventsSidebar({ events, onEventClick }: Props) {
     </aside>
   );
 }
+
+export default memo(EventsSidebar);

@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { EVENT_TYPE_COLORS } from "../utils/types";
 
 const EVENT_TYPES = Object.keys(EVENT_TYPE_COLORS) as Array<keyof typeof EVENT_TYPE_COLORS>;
@@ -13,7 +14,7 @@ interface Props {
 
 const ALL_SOURCES = ["gdelt", "acled", "rss", "bluesky", "wikipedia"];
 
-export default function FilterBar({
+function FilterBar({
   activeTypes,
   onToggleType,
   showHeatmap,
@@ -84,3 +85,5 @@ export default function FilterBar({
     </div>
   );
 }
+
+export default memo(FilterBar);

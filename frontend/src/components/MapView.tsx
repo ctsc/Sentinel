@@ -4,7 +4,6 @@ import { MapView as DeckMapView, FlyToInterpolator } from "@deck.gl/core";
 import Map from "react-map-gl/mapbox";
 import "mapbox-gl/dist/mapbox-gl.css";
 import type { SentinelEvent } from "../utils/types";
-import { classifyEvent, getEventTitle } from "../utils/types";
 import { createScatterLayers } from "../layers/scatter";
 import { createHeatmapLayer } from "../layers/heatmap";
 
@@ -83,8 +82,8 @@ const MapViewComponent = forwardRef<MapViewHandle, Props>(
 
     const getTooltip = useCallback(({ object }: { object?: SentinelEvent }) => {
       if (!object) return null;
-      const title = getEventTitle(object);
-      const type = classifyEvent(object);
+      const title = object._title ?? object.title ?? object.raw_text ?? "";
+      const type = object._type ?? "other";
       return {
         html: `<div style="padding:6px 10px;font-size:12px;max-width:280px;line-height:1.4"><strong style="text-transform:uppercase;font-size:10px;letter-spacing:1px;opacity:0.7">${type}</strong><br/>${title}</div>`,
         style: {

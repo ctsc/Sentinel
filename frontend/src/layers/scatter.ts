@@ -1,72 +1,56 @@
 import { ScatterplotLayer } from "@deck.gl/layers";
 import type { SentinelEvent } from "../utils/types";
-import { EVENT_TYPE_COLORS, classifyEvent } from "../utils/types";
 
 /**
  * Two-layer "glowing dot" scatter:
  *   - event-glow: large translucent halo scaled to severity (non-pickable)
  *   - event-core: small opaque dot centered on the event (pickable)
  *
- * Both share event type color. Looks like real dashboards (liveuamap,
- * flightradar) rather than the old unicode-glyph approach.
+ * Sized in meters so dots shrink to sub-pixel at world zoom (letting the
+ * heatmap dominate) and grow as you zoom in. Colors/positions read from
+ * the precomputed `_color` / `_position` fields — no classifier calls on
+ * the render path.
  */
 export function createScatterLayers(
   data: SentinelEvent[],
   onClick?: (info: { object?: SentinelEvent }) => void
 ) {
-  const filtered = data.filter(
-    (e) => e.geo?.lat != null && e.geo?.lon != null
-  );
-
-  const trigger = [filtered.length];
-
   const glow = new ScatterplotLayer<SentinelEvent>({
     id: "event-glow",
-    data: filtered,
+    data,
     pickable: false,
-    radiusUnits: "pixels",
-    radiusMinPixels: 6,
-    radiusMaxPixels: 22,
-    getPosition: (d) => [d.geo.lon!, d.geo.lat!],
-    getRadius: (d) => 6 + Math.min((d.severity ?? 5) * 1.4, 14),
+    radiusUnits: "meters",
+    radiusMinPixels: 0,   // invisible at world zoom
+    radiusMaxPixels: 28,
+    getPosition: (d) => d._position ?? [d.geo.lon ?? 0, d.geo.lat ?? 0],
+    getRadius: (d) => 25000 + Math.min((d.severity ?? 5) * 6000, 40000),
     getFillColor: (d) => {
-      const c = EVENT_TYPE_COLORS[classifyEvent(d)] ?? [150, 150, 150];
+      const c = d._color ?? [150, 150, 150];
       const sev = d.severity ?? 5;
-      // More severe → a touch more visible halo
       const alpha = 40 + Math.min(sev * 4, 40);
       return [c[0], c[1], c[2], alpha];
     },
     stroked: false,
-    updateTriggers: {
-      getPosition: trigger,
-      getRadius: trigger,
-      getFillColor: trigger,
-    },
   });
 
   const core = new ScatterplotLayer<SentinelEvent>({
     id: "event-core",
-    data: filtered,
+    data,
     pickable: true,
-    radiusUnits: "pixels",
-    radiusMinPixels: 2.5,
-    radiusMaxPixels: 7,
-    getPosition: (d) => [d.geo.lon!, d.geo.lat!],
-    getRadius: (d) => 2.5 + Math.min((d.severity ?? 5) * 0.4, 4),
+    radiusUnits: "meters",
+    radiusMinPixels: 0,   // invisible at world zoom
+    radiusMaxPixels: 8,
+    getPosition: (d) => d._position ?? [d.geo.lon ?? 0, d.geo.lat ?? 0],
+    getRadius: (d) => 10000 + Math.min((d.severity ?? 5) * 2500, 20000),
     getFillColor: (d) => {
-      const c = EVENT_TYPE_COLORS[classifyEvent(d)] ?? [180, 180, 180];
+      const c = d._color ?? [180, 180, 180];
       return [c[0], c[1], c[2], 235];
     },
     stroked: true,
     lineWidthUnits: "pixels",
     getLineWidth: 1,
-    getLineColor: [10, 10, 26, 180], // matches the dark map bg for clean edge
+    getLineColor: [10, 10, 26, 180],
     onClick: onClick as unknown as () => void,
-    updateTriggers: {
-      getPosition: trigger,
-      getRadius: trigger,
-      getFillColor: trigger,
-    },
   });
 
   return [glow, core];

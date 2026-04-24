@@ -6,14 +6,15 @@ import EventPanel from "./components/EventPanel";
 import EventsSidebar from "./components/EventsSidebar";
 import useWebSocket from "./hooks/useWebSocket";
 import useEvents from "./hooks/useEvents";
+import useThrottledSourceCounts from "./hooks/useThrottledSourceCounts";
 import type { SentinelEvent } from "./utils/types";
-import { EVENT_TYPE_COLORS, classifyEvent } from "./utils/types";
+import { EVENT_TYPE_COLORS } from "./utils/types";
 import "./App.css";
 
 const ALL_TYPES = new Set(Object.keys(EVENT_TYPE_COLORS));
 const ALL_SOURCES = new Set(["gdelt", "acled", "rss", "bluesky", "wikipedia"]);
 const HISTORY_HOURS = 168;    // 7 days
-const HISTORY_LIMIT = 10000;  // cap on initial pre-seed
+const HISTORY_LIMIT = 3000;   // pre-seed cap
 
 function App() {
   const { events: wsEvents, connected, eventsPerMinute, lastEventTime, reconnecting } = useWebSocket();
@@ -23,21 +24,24 @@ function App() {
     fetchEvents({ hours: String(HISTORY_HOURS), limit: String(HISTORY_LIMIT) });
   }, [fetchEvents]);
 
+  // Both sources are pre-enriched and pre-deduped within themselves; the only
+  // cross-source overlap is history ∩ live, which we drop here.
   const liveEvents = useMemo(() => {
-    // Merge history + WebSocket live stream, dedupe by event_id, drop any
-    // without coordinates (unplaceable on map). Newest-first.
     const seen = new Set<string>();
     const combined: SentinelEvent[] = [];
-    const push = (ev: SentinelEvent) => {
-      if (!ev.event_id || seen.has(ev.event_id)) return;
-      if (ev.geo?.lat == null || ev.geo?.lon == null) return;
+    for (const ev of wsEvents) {
+      if (seen.has(ev.event_id)) continue;
       seen.add(ev.event_id);
       combined.push(ev);
-    };
-    wsEvents.forEach(push);
-    historyEvents.forEach(push);
+    }
+    for (const ev of historyEvents) {
+      if (seen.has(ev.event_id)) continue;
+      seen.add(ev.event_id);
+      combined.push(ev);
+    }
     return combined;
   }, [wsEvents, historyEvents]);
+
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<SentinelEvent | null>(null);
   const mapRef = useRef<MapViewHandle | null>(null);
@@ -47,13 +51,14 @@ function App() {
       mapRef.current?.flyTo(event.geo.lon, event.geo.lat, 7);
     }
   }, []);
+
   const [activeTypes, setActiveTypes] = useState<Set<string>>(ALL_TYPES);
   const [activeSources, setActiveSources] = useState<Set<string>>(ALL_SOURCES);
   const [showHeatmap, setShowHeatmap] = useState(true);
 
   const filteredEvents = useMemo(() => {
     return liveEvents.filter(
-      (e) => activeTypes.has(classifyEvent(e)) && activeSources.has(e.source)
+      (e) => activeTypes.has(e._type ?? "other") && activeSources.has(e.source)
     );
   }, [liveEvents, activeTypes, activeSources]);
 
@@ -66,19 +71,17 @@ function App() {
     });
   }, []);
 
-  const sourcesActive = useMemo(() => {
-    const sources = new Set(liveEvents.map((e) => e.source));
-    return Array.from(sources);
-  }, [liveEvents]);
+  const sourceCounts = useThrottledSourceCounts(liveEvents, 2000);
+  const sourcesActive = useMemo(
+    () => Object.keys(sourceCounts),
+    [sourceCounts]
+  );
 
   const handleToggleType = useCallback((type: string) => {
     setActiveTypes((prev) => {
       const next = new Set(prev);
-      if (next.has(type)) {
-        next.delete(type);
-      } else {
-        next.add(type);
-      }
+      if (next.has(type)) next.delete(type);
+      else next.add(type);
       return next;
     });
   }, []);
@@ -90,6 +93,12 @@ function App() {
   const handleEventClick = useCallback((event: SentinelEvent) => {
     setSelectedEvent(event);
   }, []);
+
+  const handleCloseEvent = useCallback(() => setSelectedEvent(null), []);
+  const handleToggleSidebar = useCallback(
+    () => setSidebarCollapsed((v) => !v),
+    []
+  );
 
   return (
     <div className="app">
@@ -118,10 +127,10 @@ function App() {
       )}
       <button
         className="sidebar-toggle"
-        onClick={() => setSidebarCollapsed((v) => !v)}
+        onClick={handleToggleSidebar}
         title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
       >
-        {sidebarCollapsed ? "\u25C0" : "\u25B6"}
+        {sidebarCollapsed ? "◀" : "▶"}
       </button>
       {!sidebarCollapsed && (
         <EventsSidebar
@@ -131,7 +140,7 @@ function App() {
       )}
       <EventPanel
         event={selectedEvent}
-        onClose={() => setSelectedEvent(null)}
+        onClose={handleCloseEvent}
         onLocate={handleLocate}
       />
       <StatsBar
@@ -139,7 +148,7 @@ function App() {
         eventsPerMinute={eventsPerMinute}
         connected={connected}
         sourcesActive={sourcesActive}
-        events={liveEvents}
+        sourceCounts={sourceCounts}
         lastEventTime={lastEventTime}
       />
     </div>

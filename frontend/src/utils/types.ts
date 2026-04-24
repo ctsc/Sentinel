@@ -19,6 +19,13 @@ export interface SentinelEvent {
   entities?: string[];
   severity?: number;
   dedupe_hash?: string;
+  // Client-side precomputed at ingestion to avoid re-running classifyEvent /
+  // getEventTitle / color lookup on every render. Always set on events that
+  // flow through useWebSocket / useEvents.
+  _type?: string;
+  _color?: [number, number, number];
+  _position?: [number, number];
+  _title?: string;
 }
 
 /** Event type color mapping for scatter layer. */
@@ -103,6 +110,26 @@ export const SOURCE_COLORS: Record<string, string> = {
   wikipedia: "#999999",
   telegram: "#0088cc",
 };
+
+/**
+ * Precompute the fields every render path would otherwise derive from the raw
+ * event (type, color, position tuple, display title). Runs once at ingestion
+ * — downstream code reads the `_` fields directly and never re-runs the
+ * regex-based classifier or string splitting on hot paths.
+ *
+ * Returns null for events without coordinates (unplaceable on map).
+ */
+export function enrichEvent(e: SentinelEvent): SentinelEvent | null {
+  if (e.geo?.lat == null || e.geo?.lon == null) return null;
+  if (e._position) return e; // Already enriched
+  const type = classifyEvent(e);
+  const color = EVENT_TYPE_COLORS[type] ?? [150, 150, 150];
+  e._type = type;
+  e._color = color;
+  e._position = [e.geo.lon, e.geo.lat];
+  e._title = getEventTitle(e);
+  return e;
+}
 
 /** Format a timestamp as relative time ("3 min ago", "2h ago", etc.). */
 export function formatRelativeTime(iso: string): string {

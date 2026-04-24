@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import type { SentinelEvent } from "../utils/types";
+import { enrichEvent } from "../utils/types";
 
 const WS_URL =
   import.meta.env.VITE_WS_URL ||
   `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/ws/live`;
-const MAX_EVENTS = 15000;
+const MAX_EVENTS = 5000;
 
 interface UseWebSocketReturn {
   events: SentinelEvent[];
@@ -22,6 +23,7 @@ export default function useWebSocket(): UseWebSocketReturn {
   const wsRef = useRef<WebSocket | null>(null);
   const hadConnectionRef = useRef(false);
   const eventCountRef = useRef(0);
+  const seenIdsRef = useRef<Set<string>>(new Set());
   const [eventsPerMinute, setEventsPerMinute] = useState(0);
 
   useEffect(() => {
@@ -47,25 +49,29 @@ export default function useWebSocket(): UseWebSocketReturn {
     ws.onmessage = (msg) => {
       try {
         const data = JSON.parse(msg.data);
-        if (data.type === "events" && Array.isArray(data.events)) {
-          // Backend enriches events with coords, event_type, severity, confidence.
-          // Still drop any that fell through geocoding — those can't be placed.
-          const newEvents = (data.events as SentinelEvent[]).filter(
-            (e) => e.geo?.lat != null && e.geo?.lon != null
-          );
-          if (newEvents.length === 0) return;
-          eventCountRef.current += newEvents.length;
-          const latest = newEvents[newEvents.length - 1];
-          if (latest.timestamp) setLastEventTime(latest.timestamp);
+        if (data.type !== "events" || !Array.isArray(data.events)) return;
 
-          setEvents((prev) => {
-            const combined = [...prev, ...newEvents];
-            if (combined.length > MAX_EVENTS) {
-              return combined.slice(combined.length - MAX_EVENTS);
-            }
-            return combined;
-          });
+        const seen = seenIdsRef.current;
+        const newEvents: SentinelEvent[] = [];
+        for (const raw of data.events as SentinelEvent[]) {
+          if (!raw.event_id || seen.has(raw.event_id)) continue;
+          const enriched = enrichEvent(raw);
+          if (!enriched) continue;
+          seen.add(raw.event_id);
+          newEvents.push(enriched);
         }
+        if (newEvents.length === 0) return;
+
+        eventCountRef.current += newEvents.length;
+        const latest = newEvents[newEvents.length - 1];
+        if (latest.timestamp) setLastEventTime(latest.timestamp);
+
+        setEvents((prev) => {
+          const combined = prev.length + newEvents.length > MAX_EVENTS
+            ? [...prev.slice(prev.length + newEvents.length - MAX_EVENTS), ...newEvents]
+            : [...prev, ...newEvents];
+          return combined;
+        });
       } catch {
         // Ignore parse errors
       }

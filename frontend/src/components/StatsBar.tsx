@@ -1,5 +1,4 @@
-import { useMemo } from "react";
-import type { SentinelEvent } from "../utils/types";
+import { memo } from "react";
 import { SOURCE_COLORS, formatRelativeTime } from "../utils/types";
 
 interface Props {
@@ -7,26 +6,18 @@ interface Props {
   eventsPerMinute: number;
   connected: boolean;
   sourcesActive: string[];
-  events: SentinelEvent[];
+  sourceCounts: Record<string, number>;
   lastEventTime: string | null;
 }
 
-export default function StatsBar({
+function StatsBar({
   totalEvents,
   eventsPerMinute,
   connected,
   sourcesActive,
-  events,
+  sourceCounts,
   lastEventTime,
 }: Props) {
-  const sourceCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    for (const e of events) {
-      counts[e.source] = (counts[e.source] || 0) + 1;
-    }
-    return counts;
-  }, [events]);
-
   return (
     <div className="stats-bar">
       <span>
@@ -59,3 +50,5 @@ export default function StatsBar({
     </div>
   );
 }
+
+export default memo(StatsBar);

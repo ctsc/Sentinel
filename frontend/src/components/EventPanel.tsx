@@ -1,5 +1,6 @@
+import { memo } from "react";
 import type { SentinelEvent } from "../utils/types";
-import { EVENT_TYPE_COLORS, SOURCE_COLORS, classifyEvent, getEventTitle, formatRelativeTime } from "../utils/types";
+import { SOURCE_COLORS, formatRelativeTime } from "../utils/types";
 
 interface Props {
   event: SentinelEvent | null;
@@ -7,11 +8,11 @@ interface Props {
   onLocate?: (event: SentinelEvent) => void;
 }
 
-export default function EventPanel({ event, onClose, onLocate }: Props) {
+function EventPanel({ event, onClose, onLocate }: Props) {
   if (!event) return null;
 
-  const type = classifyEvent(event);
-  const typeColor = EVENT_TYPE_COLORS[type] ?? [150, 150, 150];
+  const type = event._type ?? "other";
+  const typeColor = event._color ?? [150, 150, 150];
   const canLocate =
     event.geo?.lat != null && event.geo?.lon != null && onLocate != null;
 
@@ -20,7 +21,7 @@ export default function EventPanel({ event, onClose, onLocate }: Props) {
       <button className="event-panel-close" onClick={onClose}>
         &times;
       </button>
-      <h3>{getEventTitle(event)}</h3>
+      <h3>{event._title ?? event.title ?? event.raw_text}</h3>
       <div className="event-meta">
         <span
           className="event-type-badge"
@@ -109,3 +110,5 @@ export default function EventPanel({ event, onClose, onLocate }: Props) {
     </div>
   );
 }
+
+export default memo(EventPanel);

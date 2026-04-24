@@ -1,5 +1,6 @@
 import { useState, useCallback } from "react";
 import type { SentinelEvent } from "../utils/types";
+import { enrichEvent } from "../utils/types";
 
 const API_URL = import.meta.env.VITE_API_URL || "/api";
 
@@ -30,7 +31,12 @@ export default function useEvents(): UseEventsReturn {
       }
 
       const data: SentinelEvent[] = await response.json();
-      setEvents(data);
+      const enriched: SentinelEvent[] = [];
+      for (const ev of data) {
+        const e = enrichEvent(ev);
+        if (e) enriched.push(e);
+      }
+      setEvents(enriched);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
     } finally {
